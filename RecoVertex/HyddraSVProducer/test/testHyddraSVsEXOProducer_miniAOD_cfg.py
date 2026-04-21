@@ -2,6 +2,11 @@ import FWCore.ParameterSet.Config as cms
 import FWCore.ParameterSet.VarParsing as VarParsing
 
 options = VarParsing.VarParsing('analysis')
+options.register('leptonType',
+                 'muon',
+                 VarParsing.VarParsing.multiplicity.singleton,
+                 VarParsing.VarParsing.varType.string,
+                 "Lepton type: 'muon' or 'electron'")
 options.register('maxNormChi2',
                  5.0,
                  VarParsing.VarParsing.multiplicity.singleton,
@@ -29,22 +34,26 @@ from Configuration.AlCa.GlobalTag import GlobalTag
 process.GlobalTag = GlobalTag(process.GlobalTag, 'auto:phase1_2022_realistic', '')
 
 process.load("RecoVertex.HyddraSVProducer.hyddraEXO_cfi")
+
+_src = 'slimmedMuons' if options.leptonType == 'muon' else 'slimmedElectrons'
+process.hyddraLeptonTracks.leptonType = cms.string(options.leptonType)
+process.hyddraLeptonTracks.src        = cms.InputTag(_src)
 process.hyddraSVsEXOProducer.leptonic.maxNormChi2 = cms.double(options.maxNormChi2)
 
 process.out = cms.OutputModule("PoolOutputModule",
     fileName=cms.untracked.string(options.outputFile),
     outputCommands=cms.untracked.vstring(
         'drop *',
+        'keep recoTracks_hyddraLeptonTracks__*',
         'keep recoVertexs_hyddraSVsEXOProducer_seedVertices_*',
         'keep recoVertexs_hyddraSVsEXOProducer_inclusiveVertices_*',
         'keep recoVertexs_hyddraSVsEXOProducer_isolatedVertices_*',
         'keep ints_hyddraSVsEXOProducer_disambiguationFlags_*',
         'keep ints_hyddraSVsEXOProducer_seedIsolationFlags_*',
         'keep ints_hyddraSVsEXOProducer_isolationFlags_*',
-        'keep recoTracks_hyddraSVsEXOProducer_leptonTracks_*',
     ),
 )
 
-process.p = cms.Path(process.hyddraSVsEXOProducer)
+process.p = cms.Path(process.hyddraLeptonTracks + process.hyddraSVsEXOProducer)
 process.ep = cms.EndPath(process.out)
 process.schedule = cms.Schedule(process.p, process.ep)

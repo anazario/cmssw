@@ -1,8 +1,12 @@
 import FWCore.ParameterSet.Config as cms
 
+hyddraLeptonTracks = cms.EDProducer("HyddraLeptonTrackProducer",
+    leptonType = cms.string("muon"),
+    src        = cms.InputTag("slimmedMuons"),
+)
+
 hyddraSVsEXOProducer = cms.EDProducer("HyddraSVsEXOProducer",
-    muons        = cms.InputTag("slimmedMuons"),
-    electrons    = cms.InputTag("slimmedElectrons"),
+    tracks       = cms.InputTag("hyddraLeptonTracks"),
     pvCollection = cms.InputTag("offlineSlimmedPrimaryVertices"),
     leptonic = cms.PSet(
         seedCosThetaCut = cms.double(-1.0),
