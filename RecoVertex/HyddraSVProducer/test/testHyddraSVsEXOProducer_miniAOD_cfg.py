@@ -20,7 +20,6 @@ process.maxEvents = cms.untracked.PSet(input=cms.untracked.int32(options.maxEven
 process.source = cms.Source("PoolSource",
     fileNames=cms.untracked.vstring(options.inputFiles or ['file:input.root']))
 
-process.load("Configuration.Geometry.GeometryRecoDB_cff")
 process.load("Configuration.StandardSequences.MagneticField_cff")
 process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
 process.load("TrackingTools.TransientTrack.TransientTrackBuilder_cfi")
