@@ -30,6 +30,8 @@
 #include "DataFormats/VertexReco/interface/Vertex.h"
 #include "DataFormats/VertexReco/interface/VertexFwd.h"
 
+#include "MagneticField/Engine/interface/MagneticField.h"
+#include "MagneticField/Records/interface/IdealMagneticFieldRecord.h"
 #include "TrackingTools/TransientTrack/interface/TransientTrackBuilder.h"
 #include "TrackingTools/Records/interface/TransientTrackRecord.h"
 
@@ -49,6 +51,7 @@ private:
   edm::EDGetTokenT<reco::TrackCollection> tracksToken_;
   edm::EDGetTokenT<reco::VertexCollection> pvToken_;
   edm::ESGetToken<TransientTrackBuilder, TransientTrackRecord> ttBuilderToken_;
+  edm::ESGetToken<MagneticField, IdealMagneticFieldRecord> magneticFieldToken_;
 
   LeptonicHYDDRA leptonic_;
 };
@@ -57,6 +60,7 @@ HyddraSVsEXOProducer::HyddraSVsEXOProducer(const edm::ParameterSet& iConfig) :
   tracksToken_   (consumes<reco::TrackCollection> (iConfig.getParameter<edm::InputTag>("tracks"))),
   pvToken_       (consumes<reco::VertexCollection>(iConfig.getParameter<edm::InputTag>("pvCollection"))),
   ttBuilderToken_(esConsumes(edm::ESInputTag("", "TransientTrackBuilder"))),
+  magneticFieldToken_(esConsumes<MagneticField, IdealMagneticFieldRecord>()),
   leptonic_      (iConfig.getParameter<edm::ParameterSet>("leptonic"))
 {
   produces<reco::VertexCollection> ("seedVertices");
@@ -95,9 +99,10 @@ void HyddraSVsEXOProducer::produce(edm::Event& iEvent, const edm::EventSetup& iS
     trackRefs.emplace_back(tracksHandle, i);
 
   const TransientTrackBuilder* ttBuilder = &iSetup.getData(ttBuilderToken_);
+  const MagneticField* magneticField = &iSetup.getData(magneticFieldToken_);
   const reco::Vertex& pv = pvHandle->front();
 
-  leptonic_.run_forked(trackRefs, ttBuilder, pv);
+  leptonic_.run_forked(trackRefs, ttBuilder, pv, magneticField);
 
   iEvent.put(std::make_unique<reco::VertexCollection>(leptonic_.seedVertices()),          "seedVertices");
   iEvent.put(std::make_unique<std::vector<int>>(leptonic_.computeDisambiguationFlags()), "disambiguationFlags");
@@ -115,6 +120,8 @@ void HyddraSVsEXOProducer::fillDescriptions(edm::ConfigurationDescriptions& desc
   edm::ParameterSetDescription leptonicDesc;
   leptonicDesc.add<double>("seedCosThetaCut",     -1.0);
   leptonicDesc.add<double>("maxNormChi2",          5.0);
+  leptonicDesc.add<bool>  ("applyDcaCut",         false);
+  leptonicDesc.add<double>("maxDca",              15.0);
   leptonicDesc.add<bool>  ("useSmoothing",        true);
   leptonicDesc.add<bool>  ("useMuonSystemBounds", true);
   desc.add<edm::ParameterSetDescription>("leptonic", leptonicDesc);

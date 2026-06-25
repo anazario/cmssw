@@ -1,7 +1,12 @@
 #pragma once
 
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "MagneticField/Engine/interface/MagneticField.h"
 #include "TrackingTools/TransientTrack/interface/TransientTrackBuilder.h"
+#include "TrackingTools/TrajectoryState/interface/FreeTrajectoryState.h"
+#include "TrackingTools/PatternTools/interface/TwoTrackMinimumDistance.h"
+#include "DataFormats/GeometryVector/interface/GlobalPoint.h"
+#include "DataFormats/GeometryVector/interface/GlobalVector.h"
 #include "DataFormats/VertexReco/interface/Vertex.h"
 #include "DataFormats/TrackReco/interface/TrackFwd.h"
 #include "RecoVertex/HyddraSVProducer/interface/TrackVertexSetCollection.h"
@@ -21,9 +26,12 @@ protected:
 
   double seedCosThetaCut_;
   double maxNormChi2_;
+  bool applyDcaCut_;
+  double maxDca_;
   VertexFitConfig fitConfig_;
 
   const TransientTrackBuilder* ttBuilder_   = nullptr;
+  const MagneticField*         magneticField_ = nullptr;
   const reco::Vertex*          primaryVertex_ = nullptr;
 
   TrackVertexSetCollection masterList_;
@@ -36,6 +44,8 @@ public:
   HYDDRABase(const edm::ParameterSet& pset) {
     seedCosThetaCut_ = pset.getParameter<double>("seedCosThetaCut");
     maxNormChi2_     = pset.getParameter<double>("maxNormChi2");
+    applyDcaCut_     = pset.getParameter<bool>("applyDcaCut");
+    maxDca_          = pset.getParameter<double>("maxDca");
     fitConfig_.useSmoothing = pset.getParameter<bool>("useSmoothing");
     fitConfig_.useMuonSystemBounds = pset.getParameter<bool>("useMuonSystemBounds");
   }
@@ -73,9 +83,11 @@ public:
   // Runs the forked pipeline on the given tracks.
   void run_forked(const std::vector<reco::TrackRef>& tracks,
                   const TransientTrackBuilder* builder,
-                  const reco::Vertex& pv) {
-    ttBuilder_     = builder;
-    primaryVertex_ = &pv;
+                  const reco::Vertex& pv,
+                  const MagneticField* magneticField) {
+    ttBuilder_      = builder;
+    magneticField_  = magneticField;
+    primaryVertex_  = &pv;
     this->clear();
     masterList_.clear();
 
@@ -114,6 +126,8 @@ protected:
       for (auto y = x + 1; y != end; ++y) {
 
         if (TrackHelper::OverlappingTrack(**x, **y, ttBuilder_)) continue;
+
+        if (!passesDcaCut(**x, **y)) continue;
 
         TrackVertexSet seed({*x, *y}, ttBuilder_, fitConfig_);
 
@@ -183,6 +197,22 @@ protected:
 
   bool isValidVertex(const TrackVertexSet& set) const {
     return set.isValid() && set.normChi2() < maxNormChi2_;
+  }
+
+  bool passesDcaCut(const reco::Track& track1, const reco::Track& track2) const {
+    if (!applyDcaCut_) return true;
+
+    TwoTrackMinimumDistance ttmd;
+    FreeTrajectoryState fts1(GlobalPoint(track1.vx(), track1.vy(), track1.vz()),
+                             GlobalVector(track1.px(), track1.py(), track1.pz()),
+                             track1.charge(),
+                             magneticField_);
+    FreeTrajectoryState fts2(GlobalPoint(track2.vx(), track2.vy(), track2.vz()),
+                             GlobalVector(track2.px(), track2.py(), track2.pz()),
+                             track2.charge(),
+                             magneticField_);
+    const bool status = ttmd.calculate(fts1, fts2);
+    return !status || ttmd.distance() <= maxDca_;
   }
 
   // Remove vertices with more than 2 tracks (enforces dilepton constraint in tier-1).

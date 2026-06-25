@@ -11,6 +11,8 @@ hyddraSVsEXOProducer = cms.EDProducer("HyddraSVsEXOProducer",
     leptonic = cms.PSet(
         seedCosThetaCut     = cms.double(-1.0),
         maxNormChi2         = cms.double(5.0),
+        applyDcaCut         = cms.bool(False),
+        maxDca              = cms.double(15.0),
         useSmoothing        = cms.bool(True),
         useMuonSystemBounds = cms.bool(True),
     ),
