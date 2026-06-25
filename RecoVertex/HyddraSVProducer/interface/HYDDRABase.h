@@ -21,6 +21,7 @@ protected:
 
   double seedCosThetaCut_;
   double maxNormChi2_;
+  VertexFitConfig fitConfig_;
 
   const TransientTrackBuilder* ttBuilder_   = nullptr;
   const reco::Vertex*          primaryVertex_ = nullptr;
@@ -35,6 +36,8 @@ public:
   HYDDRABase(const edm::ParameterSet& pset) {
     seedCosThetaCut_ = pset.getParameter<double>("seedCosThetaCut");
     maxNormChi2_     = pset.getParameter<double>("maxNormChi2");
+    fitConfig_.useSmoothing = pset.getParameter<bool>("useSmoothing");
+    fitConfig_.useMuonSystemBounds = pset.getParameter<bool>("useMuonSystemBounds");
   }
 
   // Accessors for the forked pipeline outputs.
@@ -112,7 +115,7 @@ protected:
 
         if (TrackHelper::OverlappingTrack(**x, **y, ttBuilder_)) continue;
 
-        TrackVertexSet seed({*x, *y}, ttBuilder_, /*useSmoothing=*/false);
+        TrackVertexSet seed({*x, *y}, ttBuilder_, fitConfig_);
 
         if (!isValidVertex(seed)) continue;
 

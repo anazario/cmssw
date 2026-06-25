@@ -113,8 +113,10 @@ void HyddraSVsEXOProducer::fillDescriptions(edm::ConfigurationDescriptions& desc
   desc.add<edm::InputTag>("pvCollection", edm::InputTag("offlineSlimmedPrimaryVertices"));
 
   edm::ParameterSetDescription leptonicDesc;
-  leptonicDesc.add<double>("seedCosThetaCut", -1.0);
-  leptonicDesc.add<double>("maxNormChi2",      5.0);
+  leptonicDesc.add<double>("seedCosThetaCut",     -1.0);
+  leptonicDesc.add<double>("maxNormChi2",          5.0);
+  leptonicDesc.add<bool>  ("useSmoothing",        true);
+  leptonicDesc.add<bool>  ("useMuonSystemBounds", true);
   desc.add<edm::ParameterSetDescription>("leptonic", leptonicDesc);
 
   descriptions.addWithDefaultLabel(desc);

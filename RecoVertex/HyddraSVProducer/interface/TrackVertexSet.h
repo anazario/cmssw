@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <limits>
 #include <iostream>
+#include <memory>
 #include <boost/math/distributions/chi_squared.hpp>
 #include "DataFormats/GeometryVector/interface/GlobalPoint.h"
 #include "RecoVertex/VertexPrimitives/interface/TransientVertex.h"
@@ -14,13 +15,18 @@
 #include "RecoVertex/HyddraSVProducer/interface/VertexHelper.h"
 #include "RecoVertex/HyddraSVProducer/interface/TrackHelper.h"
 
+struct VertexFitConfig {
+  bool useSmoothing = false;
+  bool useMuonSystemBounds = false;
+};
+
 class TrackVertexSet : public std::set<reco::TrackRef> {
  public:
 
   // Constructor with initializer list
   TrackVertexSet() = default;
-  TrackVertexSet(const std::vector<reco::TrackRef> &init, const TransientTrackBuilder* ttBuilder, bool useSmoothing = false);
-  TrackVertexSet(std::initializer_list<reco::TrackRef> init, const TransientTrackBuilder* ttBuilder, bool useSmoothing = false);
+  TrackVertexSet(const std::vector<reco::TrackRef> &init, const TransientTrackBuilder* ttBuilder, VertexFitConfig fitConfig = {});
+  TrackVertexSet(std::initializer_list<reco::TrackRef> init, const TransientTrackBuilder* ttBuilder, VertexFitConfig fitConfig = {});
   
   // Copy constructor - explicitly inherit from base class
   TrackVertexSet(const TrackVertexSet& other);
@@ -83,13 +89,12 @@ class TrackVertexSet : public std::set<reco::TrackRef> {
   
  private:
   const TransientTrackBuilder* ttBuilder_;
+  VertexFitConfig fitConfig_;
   std::unique_ptr<KalmanVertexFitter> fitter_;
   TransientVertex vertex_;
-  bool useSmoothing_ = false;
   
+  static std::unique_ptr<KalmanVertexFitter> makeFitter(const VertexFitConfig& fitConfig);
   void fit();
   std::vector<reco::TransientTrack> convertTracks() const;
   double calculateChiSquaredPValue(double chiSquaredValue, int degreesOfFreedom) const;
 };
-
-

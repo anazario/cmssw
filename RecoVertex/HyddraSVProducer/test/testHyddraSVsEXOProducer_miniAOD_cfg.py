@@ -12,6 +12,16 @@ options.register('maxNormChi2',
                  VarParsing.VarParsing.multiplicity.singleton,
                  VarParsing.VarParsing.varType.float,
                  "Max vertex chi2/ndof (default: 5.0)")
+options.register('useSmoothing',
+                 True,
+                 VarParsing.VarParsing.multiplicity.singleton,
+                 VarParsing.VarParsing.varType.bool,
+                 "Use Kalman vertex smoothing/refitted tracks")
+options.register('useMuonSystemBounds',
+                 True,
+                 VarParsing.VarParsing.multiplicity.singleton,
+                 VarParsing.VarParsing.varType.bool,
+                 "Extend Kalman vertex fitter bounds to the muon system")
 options.setDefault('maxEvents', -1)
 options.setDefault('outputFile', 'hyddraEXO_output.root')
 options.parseArguments()
@@ -39,6 +49,8 @@ _src = 'slimmedMuons' if options.leptonType == 'muon' else 'slimmedElectrons'
 process.hyddraLeptonTracks.leptonType = cms.string(options.leptonType)
 process.hyddraLeptonTracks.src        = cms.InputTag(_src)
 process.hyddraSVsEXOProducer.leptonic.maxNormChi2 = cms.double(options.maxNormChi2)
+process.hyddraSVsEXOProducer.leptonic.useSmoothing = cms.bool(options.useSmoothing)
+process.hyddraSVsEXOProducer.leptonic.useMuonSystemBounds = cms.bool(options.useMuonSystemBounds)
 
 process.out = cms.OutputModule("PoolOutputModule",
     fileName=cms.untracked.string(options.outputFile),

@@ -1,26 +1,26 @@
 #include "RecoVertex/HyddraSVProducer/interface/TrackVertexSet.h"
 
-TrackVertexSet::TrackVertexSet(const std::vector<reco::TrackRef> &init, const TransientTrackBuilder* ttBuilder, bool useSmoothing) :
+TrackVertexSet::TrackVertexSet(const std::vector<reco::TrackRef> &init, const TransientTrackBuilder* ttBuilder, VertexFitConfig fitConfig) :
   std::set<reco::TrackRef>(init.begin(), init.end()),
   ttBuilder_(ttBuilder),
-  fitter_(std::make_unique<KalmanVertexFitter>()),
-  useSmoothing_(useSmoothing) {
+  fitConfig_(fitConfig),
+  fitter_(makeFitter(fitConfig_)) {
   fit();
 }
 
-TrackVertexSet::TrackVertexSet(std::initializer_list<reco::TrackRef> init, const TransientTrackBuilder* ttBuilder, bool useSmoothing) :
+TrackVertexSet::TrackVertexSet(std::initializer_list<reco::TrackRef> init, const TransientTrackBuilder* ttBuilder, VertexFitConfig fitConfig) :
   std::set<reco::TrackRef>(init),
   ttBuilder_(ttBuilder),
-  fitter_(std::make_unique<KalmanVertexFitter>()),
-  useSmoothing_(useSmoothing) {
+  fitConfig_(fitConfig),
+  fitter_(makeFitter(fitConfig_)) {
   fit();
 }
 
 TrackVertexSet::TrackVertexSet(const TrackVertexSet& other) :
   std::set<reco::TrackRef>(other),
   ttBuilder_(other.ttBuilder_),
-  fitter_(std::make_unique<KalmanVertexFitter>()),
-  useSmoothing_(other.useSmoothing_)
+  fitConfig_(other.fitConfig_),
+  fitter_(makeFitter(fitConfig_))
 {fit();}
 
 // Transverse distance between two vertices
@@ -164,8 +164,8 @@ TrackVertexSet& TrackVertexSet::operator=(const TrackVertexSet& other) {
   if (this != &other) {
     std::set<reco::TrackRef>::operator=(other);
     ttBuilder_ = other.ttBuilder_;
-    fitter_ = std::make_unique<KalmanVertexFitter>(*other.fitter_);
-    useSmoothing_ = other.useSmoothing_;
+    fitConfig_ = other.fitConfig_;
+    fitter_ = makeFitter(fitConfig_);
     fit();
   }
   return *this;
@@ -229,6 +229,10 @@ bool TrackVertexSet::operator|=(const TrackVertexSet& other) const {
 }
 
 // private methods
+std::unique_ptr<KalmanVertexFitter> TrackVertexSet::makeFitter(const VertexFitConfig& fitConfig) {
+  return std::make_unique<KalmanVertexFitter>(fitConfig.useSmoothing, fitConfig.useMuonSystemBounds);
+}
+
 void TrackVertexSet::fit() {
   vertex_ = this->size() < 2? TransientVertex() : fitter_->vertex(convertTracks());
 }
@@ -259,16 +263,16 @@ TrackVertexSet::operator reco::Vertex() const {
   if(!vertex_.isValid())
     return reco::Vertex();
 
-  // If smoothing is requested, refit with KalmanVertexFitter(true) and store
+  // If smoothing is requested, refit and store
   // vertex-constrained refitted track parameters alongside the original TrackBaseRefs.
-  if(useSmoothing_) {
+  if(fitConfig_.useSmoothing) {
     std::vector<reco::TrackRef> orderedRefs(this->begin(), this->end());
     std::vector<reco::TransientTrack> ttracks;
     ttracks.reserve(orderedRefs.size());
     for(const auto& ref : orderedRefs)
       ttracks.emplace_back(ttBuilder_->build(*ref));
 
-    KalmanVertexFitter smoother(true);
+    KalmanVertexFitter smoother(fitConfig_.useSmoothing, fitConfig_.useMuonSystemBounds);
     TransientVertex smoothed = smoother.vertex(ttracks);
 
     if(smoothed.isValid() && smoothed.hasRefittedTracks()) {
