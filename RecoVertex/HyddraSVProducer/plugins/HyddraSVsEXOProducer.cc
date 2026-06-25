@@ -119,6 +119,7 @@ void HyddraSVsEXOProducer::fillDescriptions(edm::ConfigurationDescriptions& desc
 
   edm::ParameterSetDescription leptonicDesc;
   leptonicDesc.add<double>("seedCosThetaCut",     -1.0);
+  leptonicDesc.add<bool>  ("applySeedChi2Cut",    false);
   leptonicDesc.add<double>("maxNormChi2",          5.0);
   leptonicDesc.add<bool>  ("applyDcaCut",         false);
   leptonicDesc.add<double>("maxDca",              15.0);

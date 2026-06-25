@@ -25,6 +25,7 @@ class HYDDRABase : public TrackVertexSetCollection {
 protected:
 
   double seedCosThetaCut_;
+  bool applySeedChi2Cut_;
   double maxNormChi2_;
   bool applyDcaCut_;
   double maxDca_;
@@ -43,6 +44,7 @@ public:
 
   HYDDRABase(const edm::ParameterSet& pset) {
     seedCosThetaCut_ = pset.getParameter<double>("seedCosThetaCut");
+    applySeedChi2Cut_ = pset.getParameter<bool>("applySeedChi2Cut");
     maxNormChi2_     = pset.getParameter<double>("maxNormChi2");
     applyDcaCut_     = pset.getParameter<bool>("applyDcaCut");
     maxDca_          = pset.getParameter<double>("maxDca");
@@ -196,7 +198,9 @@ protected:
   }
 
   bool isValidVertex(const TrackVertexSet& set) const {
-    return set.isValid() && set.normChi2() < maxNormChi2_;
+    if (!set.isValid()) return false;
+    if (applySeedChi2Cut_ && set.normChi2() >= maxNormChi2_) return false;
+    return true;
   }
 
   bool passesDcaCut(const reco::Track& track1, const reco::Track& track2) const {
