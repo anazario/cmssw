@@ -16,7 +16,11 @@
 // Provides shared seeding and merging logic. Derived classes implement
 // disambiguationImpl() for their specific vertex selection strategy.
 //
-// Entry point: run_forked(), which runs two parallel disambiguation paths:
+// Entry points:
+//   run_forked(): build seeds from input tracks and run the forked pipeline.
+//   run_from_seeds(): run the forked pipeline from externally supplied seeds.
+//
+// Both entry points run two parallel disambiguation paths:
 //   Tier 0 (inclusive): seeds -> disambiguation
 //   Tier 1 (isolated):  seeds -> merging -> 2-track only -> disambiguation
 template <class Derived>
@@ -83,7 +87,7 @@ public:
   }
 
   // Runs the forked pipeline on the given tracks.
-  void run_forked(const std::vector<reco::TrackRef>& tracks,
+  void run_forked(const std::vector<reco::TrackBaseRef>& tracks,
                   const TransientTrackBuilder* builder,
                   const reco::Vertex& pv,
                   const MagneticField* magneticField) {
@@ -115,10 +119,40 @@ public:
     static_cast<std::set<TrackVertexSet>&>(*this) = tier0_;
   }
 
+  // Runs the forked pipeline from externally supplied seed vertices.
+  void run_from_seeds(const TrackVertexSetCollection& seeds,
+                      const reco::Vertex& pv,
+                      const MagneticField* magneticField) {
+    magneticField_ = magneticField;
+    primaryVertex_ = &pv;
+    this->clear();
+    masterList_.clear();
+
+    Derived& self = static_cast<Derived&>(*this);
+
+    seeds_ = seeds;
+
+    // Tier 0: seeds -> disambiguation (inclusive)
+    static_cast<std::set<TrackVertexSet>&>(*this) = seeds_;
+    self.disambiguationImpl();
+    tier0_ = static_cast<const TrackVertexSetCollection&>(*this);
+
+    // Tier 1: seeds -> merging -> 2-track only -> disambiguation (isolated)
+    static_cast<std::set<TrackVertexSet>&>(*this) = seeds_;
+    masterList_ = seeds_;
+    self.mergingImpl();
+    dropMultiTrack();
+    self.disambiguationImpl();
+    tier1_ = static_cast<const TrackVertexSetCollection&>(*this);
+
+    // Restore *this to tier-0 as the primary output
+    static_cast<std::set<TrackVertexSet>&>(*this) = tier0_;
+  }
+
 protected:
 
   // Form all valid 2-track seed vertices from the input tracks.
-  void generateSeeds(const std::vector<reco::TrackRef>& tracks) {
+  void generateSeeds(const std::vector<reco::TrackBaseRef>& tracks) {
     if (tracks.size() < 2) return;
 
     auto end   = tracks.end();

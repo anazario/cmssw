@@ -15,7 +15,7 @@ public:
 
   LeptonicHYDDRA(const edm::ParameterSet& pset) : HYDDRABase(pset) {}
 
-  void seedingImpl(const std::vector<reco::TrackRef>& tracks) {
+  void seedingImpl(const std::vector<reco::TrackBaseRef>& tracks) {
     this->generateSeeds(tracks);
   }
 
@@ -27,7 +27,7 @@ public:
     if (this->empty()) return;
 
     // Map each track to the vertices that contain it
-    std::map<reco::TrackRef, std::vector<const TrackVertexSet*>> trackToVertices;
+    std::map<reco::TrackBaseRef, std::vector<const TrackVertexSet*>, TrackBaseRefLess> trackToVertices;
     for (const auto& vtx : *this)
       for (const auto& track : vtx)
         trackToVertices[track].push_back(&vtx);

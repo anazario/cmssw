@@ -93,10 +93,10 @@ void HyddraSVsEXOProducer::produce(edm::Event& iEvent, const edm::EventSetup& iS
     return;
   }
 
-  std::vector<reco::TrackRef> trackRefs;
+  std::vector<reco::TrackBaseRef> trackRefs;
   trackRefs.reserve(tracksHandle->size());
   for (size_t i = 0; i < tracksHandle->size(); ++i)
-    trackRefs.emplace_back(tracksHandle, i);
+    trackRefs.emplace_back(reco::TrackRef(tracksHandle, i));
 
   const TransientTrackBuilder* ttBuilder = &iSetup.getData(ttBuilderToken_);
   const MagneticField* magneticField = &iSetup.getData(magneticFieldToken_);

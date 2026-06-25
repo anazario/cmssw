@@ -26,8 +26,8 @@ public:
 
   reco::VertexCollection vertices() const;
   reco::TrackCollection tracks() const;
-  std::set<reco::TrackRef> completeTrackSet() const;
-  std::set<reco::TrackRef> overlappingTracks() const;
+  std::set<reco::TrackBaseRef, TrackBaseRefLess> completeTrackSet() const;
+  std::set<reco::TrackBaseRef, TrackBaseRefLess> overlappingTracks() const;
   bool hasExclusiveVertices() const;
   size_t countOverlaps() const;
 };

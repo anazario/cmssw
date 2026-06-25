@@ -6,6 +6,9 @@
 #include <memory>
 #include <boost/math/distributions/chi_squared.hpp>
 #include "DataFormats/GeometryVector/interface/GlobalPoint.h"
+#include "DataFormats/GsfTrackReco/interface/GsfTrack.h"
+#include "DataFormats/GsfTrackReco/interface/GsfTrackFwd.h"
+#include "DataFormats/TrackReco/interface/TrackFwd.h"
 #include "RecoVertex/VertexPrimitives/interface/TransientVertex.h"
 #include "RecoVertex/KalmanVertexFit/interface/KalmanVertexFitter.h"
 #include "RecoVertex/KalmanVertexFit/interface/KalmanVertexTrackCompatibilityEstimator.h"
@@ -20,13 +23,22 @@ struct VertexFitConfig {
   bool useMuonSystemBounds = false;
 };
 
-class TrackVertexSet : public std::set<reco::TrackRef> {
+struct TrackBaseRefLess {
+  bool operator()(const reco::TrackBaseRef& a, const reco::TrackBaseRef& b) const {
+    if (a.isNull()) return b.isNonnull();
+    if (b.isNull()) return false;
+    if (!(a.id() == b.id())) return a.id() < b.id();
+    return a.key() < b.key();
+  }
+};
+
+class TrackVertexSet : public std::set<reco::TrackBaseRef, TrackBaseRefLess> {
  public:
 
   // Constructor with initializer list
   TrackVertexSet() = default;
-  TrackVertexSet(const std::vector<reco::TrackRef> &init, const TransientTrackBuilder* ttBuilder, VertexFitConfig fitConfig = {});
-  TrackVertexSet(std::initializer_list<reco::TrackRef> init, const TransientTrackBuilder* ttBuilder, VertexFitConfig fitConfig = {});
+  TrackVertexSet(const std::vector<reco::TrackBaseRef> &init, const TransientTrackBuilder* ttBuilder, VertexFitConfig fitConfig = {});
+  TrackVertexSet(std::initializer_list<reco::TrackBaseRef> init, const TransientTrackBuilder* ttBuilder, VertexFitConfig fitConfig = {});
   
   // Copy constructor - explicitly inherit from base class
   TrackVertexSet(const TrackVertexSet& other);
@@ -51,26 +63,26 @@ class TrackVertexSet : public std::set<reco::TrackRef> {
   double distance(const TrackVertexSet& other) const;
   double distanceError(const TrackVertexSet& other) const;
   double distanceSignificance(const TrackVertexSet& other) const;
-  double compatibility(const reco::TrackRef &track) const;
+  double compatibility(const reco::TrackBaseRef &track) const;
   double dxy(const reco::Vertex &primaryVertex)	const {return VertexHelper::CalculateDxy(*this, primaryVertex);}
   double dxyError(const reco::Vertex &primaryVertex) const {return VertexHelper::CalculateDxyError(*this, primaryVertex);}
   double cosTheta(const reco::Vertex &primaryVertex) const { return VertexHelper::CalculateCosTheta(primaryVertex, *this); }
-  double trackCosTheta(const reco::Vertex &primaryVertex, const reco::TrackRef &track) const{ return TrackHelper::CalculateCosTheta(primaryVertex, *this, *track); }
-  double trackDecayAngleCM(const reco::TrackRef &track) const { return VertexHelper::CalculateCMCosTheta(*this, *track); }
-  double shiftDzAfterTrackRemoval(const reco::TrackRef &track) const;
-  double shift3DAfterTrackRemoval(const reco::TrackRef &track) const;
+  double trackCosTheta(const reco::Vertex &primaryVertex, const reco::TrackBaseRef &track) const{ return TrackHelper::CalculateCosTheta(primaryVertex, *this, *track); }
+  double trackDecayAngleCM(const reco::TrackBaseRef &track) const { return VertexHelper::CalculateCMCosTheta(*this, *track); }
+  double shiftDzAfterTrackRemoval(const reco::TrackBaseRef &track) const;
+  double shift3DAfterTrackRemoval(const reco::TrackBaseRef &track) const;
   GlobalPoint position() const {return vertex_.position();}
   std::vector<reco::Track> trackList() const;
-  std::vector<reco::TrackRef> tracks() const;
-  std::vector<reco::TrackRef> commonTracks(const TrackVertexSet& other) const;
+  std::vector<reco::TrackBaseRef> tracks() const;
+  std::vector<reco::TrackBaseRef> commonTracks(const TrackVertexSet& other) const;
   
   void printTrackInfo() const;
 
   // element manipulation
   void clearTracks();
-  void addTrack(const reco::TrackRef& track);
-  void removeTrack(const reco::TrackRef& track);
-  bool contains(const reco::TrackRef& track) const;
+  void addTrack(const reco::TrackBaseRef& track);
+  void removeTrack(const reco::TrackBaseRef& track);
+  bool contains(const reco::TrackBaseRef& track) const;
   
   // interaction with other TrackVertexSets
   bool isSmallerThan(const TrackVertexSet &other) const {return this->size() < other.size();}
@@ -96,5 +108,6 @@ class TrackVertexSet : public std::set<reco::TrackRef> {
   static std::unique_ptr<KalmanVertexFitter> makeFitter(const VertexFitConfig& fitConfig);
   void fit();
   std::vector<reco::TransientTrack> convertTracks() const;
+  reco::TransientTrack buildTransientTrack(const reco::TrackBaseRef& track) const;
   double calculateChiSquaredPValue(double chiSquaredValue, int degreesOfFreedom) const;
 };

@@ -1,15 +1,15 @@
 #include "RecoVertex/HyddraSVProducer/interface/TrackVertexSet.h"
 
-TrackVertexSet::TrackVertexSet(const std::vector<reco::TrackRef> &init, const TransientTrackBuilder* ttBuilder, VertexFitConfig fitConfig) :
-  std::set<reco::TrackRef>(init.begin(), init.end()),
+TrackVertexSet::TrackVertexSet(const std::vector<reco::TrackBaseRef> &init, const TransientTrackBuilder* ttBuilder, VertexFitConfig fitConfig) :
+  std::set<reco::TrackBaseRef, TrackBaseRefLess>(init.begin(), init.end()),
   ttBuilder_(ttBuilder),
   fitConfig_(fitConfig),
   fitter_(makeFitter(fitConfig_)) {
   fit();
 }
 
-TrackVertexSet::TrackVertexSet(std::initializer_list<reco::TrackRef> init, const TransientTrackBuilder* ttBuilder, VertexFitConfig fitConfig) :
-  std::set<reco::TrackRef>(init),
+TrackVertexSet::TrackVertexSet(std::initializer_list<reco::TrackBaseRef> init, const TransientTrackBuilder* ttBuilder, VertexFitConfig fitConfig) :
+  std::set<reco::TrackBaseRef, TrackBaseRefLess>(init),
   ttBuilder_(ttBuilder),
   fitConfig_(fitConfig),
   fitter_(makeFitter(fitConfig_)) {
@@ -17,7 +17,7 @@ TrackVertexSet::TrackVertexSet(std::initializer_list<reco::TrackRef> init, const
 }
 
 TrackVertexSet::TrackVertexSet(const TrackVertexSet& other) :
-  std::set<reco::TrackRef>(other),
+  std::set<reco::TrackBaseRef, TrackBaseRefLess>(other),
   ttBuilder_(other.ttBuilder_),
   fitConfig_(other.fitConfig_),
   fitter_(makeFitter(fitConfig_))
@@ -54,14 +54,14 @@ double TrackVertexSet::distanceSignificance(const TrackVertexSet& other) const {
 }
 
 // Uses KalmanVertexTrackCompatibilityEstimator to check compatibility between this vertex and one of its tracks
-double TrackVertexSet::compatibility(const reco::TrackRef &track) const {
+double TrackVertexSet::compatibility(const reco::TrackBaseRef &track) const {
 
   if(!contains(track)) {
     std::cout << "Warning in TrackVertexSet::compatibility: Given track is not in vertex!" << std::endl;
     return 999.;
   }
   const KalmanVertexTrackCompatibilityEstimator<5> estimator;
-  auto result(estimator.estimate(*this, ttBuilder_->build(*track)));
+  auto result(estimator.estimate(*this, buildTransientTrack(track)));
 
   if(!result.first)
     throw std::runtime_error("Track compatibility estimation failed");
@@ -69,7 +69,7 @@ double TrackVertexSet::compatibility(const reco::TrackRef &track) const {
   return std::sqrt(result.second);
 }
 
-double TrackVertexSet::shiftDzAfterTrackRemoval(const reco::TrackRef &track) const {
+double TrackVertexSet::shiftDzAfterTrackRemoval(const reco::TrackBaseRef &track) const {
 
   TrackVertexSet thisSetMinusTrack = *this;
   thisSetMinusTrack.removeTrack(track);
@@ -77,7 +77,7 @@ double TrackVertexSet::shiftDzAfterTrackRemoval(const reco::TrackRef &track) con
   return thisSetMinusTrack.isValid()? fabs(this->position().z() - thisSetMinusTrack.position().z()) : -1.;
 }
 
-double TrackVertexSet::shift3DAfterTrackRemoval(const reco::TrackRef &track) const {
+double TrackVertexSet::shift3DAfterTrackRemoval(const reco::TrackBaseRef &track) const {
 
   TrackVertexSet thisSetMinusTrack = *this;
   thisSetMinusTrack.removeTrack(track);
@@ -86,26 +86,26 @@ double TrackVertexSet::shift3DAfterTrackRemoval(const reco::TrackRef &track) con
 }
 
 std::vector<reco::Track> TrackVertexSet::trackList() const {
-  std::vector<reco::TrackRef> returnTracks(this->begin(), this->end());
+  std::vector<reco::TrackBaseRef> returnTracks(this->begin(), this->end());
   std::vector<reco::Track> tracks;
   for(const auto& trackRef : returnTracks)
     tracks.emplace_back(*trackRef);
   return tracks;
 }
 
-std::vector<reco::TrackRef> TrackVertexSet::tracks() const {
+std::vector<reco::TrackBaseRef> TrackVertexSet::tracks() const {
 
-  std::vector<reco::TrackRef> returnTracks(this->begin(), this->end());
+  std::vector<reco::TrackBaseRef> returnTracks(this->begin(), this->end());
   std::sort(returnTracks.begin(), returnTracks.end(),
-    [](const reco::TrackRef& a, const reco::TrackRef& b) {
+    [](const reco::TrackBaseRef& a, const reco::TrackBaseRef& b) {
       return a->pt() < b->pt();
     });
   return returnTracks;
 }
 
 // Function to return common tracks between two sets
-std::vector<reco::TrackRef> TrackVertexSet::commonTracks(const TrackVertexSet& other) const {
-  std::vector<reco::TrackRef> common;
+std::vector<reco::TrackBaseRef> TrackVertexSet::commonTracks(const TrackVertexSet& other) const {
+  std::vector<reco::TrackBaseRef> common;
   for (const auto& track : other) {
     if (this->contains(track)) {
       common.emplace_back(track);
@@ -134,18 +134,18 @@ TrackVertexSet TrackVertexSet::merge(const TrackVertexSet &other) const {
 }
 
 // Add a track to the set
-void TrackVertexSet::addTrack(const reco::TrackRef& track) {
+void TrackVertexSet::addTrack(const reco::TrackBaseRef& track) {
   this->insert(track);
   fit();
 }
 
 // Check if a track exists in the set
-bool TrackVertexSet::contains(const reco::TrackRef& track) const {
+bool TrackVertexSet::contains(const reco::TrackBaseRef& track) const {
   return this->find(track) != this->end();
 }
 
 // Remove a track from the set
-void TrackVertexSet::removeTrack(const reco::TrackRef& track) {
+void TrackVertexSet::removeTrack(const reco::TrackBaseRef& track) {
   this->erase(track);
   if(this->size() > 1)
     fit();
@@ -162,7 +162,7 @@ void TrackVertexSet::clearTracks() {
 
 TrackVertexSet& TrackVertexSet::operator=(const TrackVertexSet& other) {
   if (this != &other) {
-    std::set<reco::TrackRef>::operator=(other);
+    std::set<reco::TrackBaseRef, TrackBaseRefLess>::operator=(other);
     ttBuilder_ = other.ttBuilder_;
     fitConfig_ = other.fitConfig_;
     fitter_ = makeFitter(fitConfig_);
@@ -198,9 +198,10 @@ bool TrackVertexSet::operator<(const TrackVertexSet& other) const {
     if (this->size() != other.size())
         return this->size() < other.size();
 
-    // Use std::lexicographical_compare on the set's iterators directly
+    // Use the same ref ordering as the underlying set.
     return std::lexicographical_compare(this->begin(), this->end(),
-                                        other.begin(), other.end());
+                                        other.begin(), other.end(),
+                                        TrackBaseRefLess());
 }
 
 // Overloaded equality operator to compare elements
@@ -241,9 +242,15 @@ std::vector<reco::TransientTrack> TrackVertexSet::convertTracks() const {
 
   std::vector<reco::TransientTrack> ttracks;
   for(const auto& track : *this) {
-    ttracks.emplace_back(ttBuilder_->build(*track));
+    ttracks.emplace_back(buildTransientTrack(track));
   }
   return ttracks;
+}
+
+reco::TransientTrack TrackVertexSet::buildTransientTrack(const reco::TrackBaseRef& track) const {
+  if (dynamic_cast<const reco::GsfTrack*>(&*track))
+    return ttBuilder_->build(track.castTo<reco::GsfTrackRef>());
+  return ttBuilder_->build(track.castTo<reco::TrackRef>());
 }
 
 double TrackVertexSet::calculateChiSquaredPValue(double chiSquaredValue, int degreesOfFreedom) const {
@@ -266,11 +273,11 @@ TrackVertexSet::operator reco::Vertex() const {
   // If smoothing is requested, refit and store
   // vertex-constrained refitted track parameters alongside the original TrackBaseRefs.
   if(fitConfig_.useSmoothing) {
-    std::vector<reco::TrackRef> orderedRefs(this->begin(), this->end());
+    std::vector<reco::TrackBaseRef> orderedRefs(this->begin(), this->end());
     std::vector<reco::TransientTrack> ttracks;
     ttracks.reserve(orderedRefs.size());
     for(const auto& ref : orderedRefs)
-      ttracks.emplace_back(ttBuilder_->build(*ref));
+      ttracks.emplace_back(buildTransientTrack(ref));
 
     KalmanVertexFitter smoother(fitConfig_.useSmoothing, fitConfig_.useMuonSystemBounds);
     TransientVertex smoothed = smoother.vertex(ttracks);
@@ -286,7 +293,7 @@ TrackVertexSet::operator reco::Vertex() const {
 
       for(size_t i = 0; i < ttracks.size(); ++i) {
         reco::TransientTrack refitted = smoothed.refittedTrack(ttracks[i]);
-        recoVertex.add(reco::TrackBaseRef(orderedRefs[i]), refitted.track(), 1.0);
+        recoVertex.add(orderedRefs[i], refitted.track(), 1.0);
       }
       return recoVertex;
     }
@@ -307,7 +314,7 @@ TrackVertexSet::operator reco::Vertex() const {
     return reco::Vertex();
 
   for(const auto &trackRef : *this) {
-    recoVertex.add(reco::TrackBaseRef(trackRef), recoVertex.trackWeight(reco::TrackBaseRef(trackRef)));
+    recoVertex.add(trackRef, recoVertex.trackWeight(trackRef));
   }
 
   return recoVertex;

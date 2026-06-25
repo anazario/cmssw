@@ -103,9 +103,9 @@ reco::TrackCollection TrackVertexSetCollection::tracks() const {
   return tracks;
 }
 
-std::set<reco::TrackRef> TrackVertexSetCollection::completeTrackSet() const {
+std::set<reco::TrackBaseRef, TrackBaseRefLess> TrackVertexSetCollection::completeTrackSet() const {
 
-  std::set<reco::TrackRef> allTracks;
+  std::set<reco::TrackBaseRef, TrackBaseRefLess> allTracks;
   for(const auto &vertex : *this) {
     for(const auto &track : vertex)
       allTracks.insert(track);
@@ -114,9 +114,9 @@ std::set<reco::TrackRef> TrackVertexSetCollection::completeTrackSet() const {
   return allTracks;
 }
 
-std::set<reco::TrackRef> TrackVertexSetCollection::overlappingTracks() const {
+std::set<reco::TrackBaseRef, TrackBaseRefLess> TrackVertexSetCollection::overlappingTracks() const {
   // Step 1: Track occurrence count
-  std::map<reco::TrackRef, int> trackCount;
+  std::map<reco::TrackBaseRef, int, TrackBaseRefLess> trackCount;
 
   // Step 2: Iterate over all TrackVertexSets to count each track
   for (const auto& vertexSet : *this) {
@@ -126,7 +126,7 @@ std::set<reco::TrackRef> TrackVertexSetCollection::overlappingTracks() const {
   }
 
   // Step 3: Collect tracks that appear more than once
-  std::set<reco::TrackRef> overlappingTracks;
+  std::set<reco::TrackBaseRef, TrackBaseRefLess> overlappingTracks;
   for (const auto& trackEntry : trackCount) {
     if (trackEntry.second > 1) {
       overlappingTracks.insert(trackEntry.first);
@@ -138,7 +138,7 @@ std::set<reco::TrackRef> TrackVertexSetCollection::overlappingTracks() const {
 
 bool TrackVertexSetCollection::hasExclusiveVertices() const {
 
-  std::set<reco::TrackRef> encounteredTracks;
+  std::set<reco::TrackBaseRef, TrackBaseRefLess> encounteredTracks;
 
   // Iterate through each TrackVertexSet in the collection
   for (const auto& trackVertexSet : *this) {
