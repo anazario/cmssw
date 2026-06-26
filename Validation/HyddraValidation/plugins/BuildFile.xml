@@ -1,0 +1,16 @@
+<use name="FWCore/Framework"/>
+<use name="FWCore/PluginManager"/>
+<use name="FWCore/ServiceRegistry"/>
+<use name="CommonTools/UtilAlgos"/>
+<use name="DataFormats/TrackReco"/>
+<use name="DataFormats/GsfTrackReco"/>
+<use name="DataFormats/VertexReco"/>
+<use name="DataFormats/HepMCCandidate"/>
+<use name="DataFormats/PatCandidates"/>
+<use name="MagneticField/Engine"/>
+<use name="MagneticField/Records"/>
+<use name="RecoVertex/HyddraSVProducer"/>
+<use name="TrackingTools/TransientTrack"/>
+<use name="TrackingTools/Records"/>
+<use name="root"/>
+<flags EDM_PLUGIN="1"/>
