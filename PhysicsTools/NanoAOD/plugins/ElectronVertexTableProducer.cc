@@ -22,6 +22,7 @@
 
 #include "RecoVertex/VertexPrimitives/interface/TransientVertex.h"
 #include "RecoVertex/KalmanVertexFit/interface/KalmanVertexFitter.h"
+#include "RecoVertex/HyddraSVProducer/interface/LeptonicHYDDRA.h"
 
 #include "RecoVertex/KinematicFitPrimitives/interface/ParticleMass.h"
 #include "RecoVertex/KinematicFitPrimitives/interface/MultiTrackKinematicConstraint.h"
@@ -55,6 +56,7 @@ public:
       : electronTag_(consumes<std::vector<pat::Electron>>(iConfig.getParameter<edm::InputTag>("electrons"))),
         bsTag_(consumes<reco::BeamSpot>(iConfig.getParameter<edm::InputTag>("beamspot"))),
         pvTag_(consumes<reco::VertexCollection>(iConfig.getParameter<edm::InputTag>("primaryVertex"))),
+        hyddraConfig_(iConfig.getParameter<edm::ParameterSet>("hyddra")),
         magneticFieldToken_(esConsumes<MagneticField, IdealMagneticFieldRecord>()),
         tkerGeomToken_(esConsumes<TrackerGeometry, TrackerDigiGeometryRecord>()),
         tkerTopoToken_(esConsumes<TrackerTopology, TrackerTopologyRcd>()),
@@ -70,6 +72,15 @@ public:
     desc.add<edm::InputTag>("electrons")->setComment("input pat electrons collection");
     desc.add<edm::InputTag>("beamspot")->setComment("input beamspot collection");
     desc.add<edm::InputTag>("primaryVertex")->setComment("input primaryVertex collection");
+    edm::ParameterSetDescription hyddraDesc;
+    hyddraDesc.add<double>("seedCosThetaCut", -1.0);
+    hyddraDesc.add<bool>("applySeedChi2Cut", false);
+    hyddraDesc.add<double>("maxNormChi2", 1.0e9);
+    hyddraDesc.add<bool>("applyDcaCut", false);
+    hyddraDesc.add<double>("maxDca", 1.0e9);
+    hyddraDesc.add<bool>("useSmoothing", true);
+    hyddraDesc.add<bool>("useMuonSystemBounds", true);
+    desc.add<edm::ParameterSetDescription>("hyddra", hyddraDesc);
     descriptions.add("electronVertexTables", desc);
   }
 
@@ -85,6 +96,7 @@ private:
   const edm::EDGetTokenT<std::vector<pat::Electron>> electronTag_;
   const edm::EDGetTokenT<reco::BeamSpot> bsTag_;
   const edm::EDGetTokenT<reco::VertexCollection> pvTag_;
+  const edm::ParameterSet hyddraConfig_;
   const edm::ESGetToken<MagneticField, IdealMagneticFieldRecord> magneticFieldToken_;
   const edm::ESGetToken<TrackerGeometry, TrackerDigiGeometryRecord> tkerGeomToken_;
   const edm::ESGetToken<TrackerTopology, TrackerTopologyRcd> tkerTopoToken_;
@@ -115,6 +127,9 @@ void ElectronVertexTableProducer::produce(edm::StreamID, edm::Event& iEvent, con
   int refittedTrackIdx_counter = 0;
 
   std::vector<bool> vertexIsValid;
+  std::vector<TrackVertexSet> hyddraRowSeeds;
+  TrackVertexSetCollection hyddraSeeds;
+  VertexFitConfig hyddraFitConfig{true, true};
   std::vector<float> vxy, vxyz, vx, vy, vz, t, vxySigma, vxyzSigma, vxErr, vyErr, vzErr, tErr;
   std::vector<float> chi2, ndof, normChi2, dR, originalElectronIdx1, originalElectronIdx2, refittedTrackIdx1,
       refittedTrackIdx2;
@@ -163,6 +178,12 @@ void ElectronVertexTableProducer::produce(edm::StreamID, edm::Event& iEvent, con
       // if dca status is good but dca is more than 15 cm
       if (std::get<1>(distanceTuple) && std::get<0>(distanceTuple) > 15)
         continue;
+
+      const reco::TrackBaseRef hyddraTrackRef_i(trackRef_i);
+      const reco::TrackBaseRef hyddraTrackRef_j(trackRef_j);
+      TrackVertexSet hyddraSeed({hyddraTrackRef_i, hyddraTrackRef_j}, &builder, hyddraFitConfig);
+      hyddraRowSeeds.push_back(hyddraSeed);
+      hyddraSeeds.add(hyddraSeed);
 
       nElectronVertices++;
 
@@ -350,6 +371,17 @@ void ElectronVertexTableProducer::produce(edm::StreamID, edm::Event& iEvent, con
   auto refittedTracksTab =
       std::make_unique<nanoaod::FlatTable>(nElectronVertices * 2, "ElectronVertexRefittedTracks", false, false);
 
+  std::vector<bool> passHyddraDisambiguation;
+  std::vector<bool> passHyddraIsolation;
+  passHyddraDisambiguation.reserve(hyddraRowSeeds.size());
+  passHyddraIsolation.reserve(hyddraRowSeeds.size());
+  LeptonicHYDDRA hyddra(hyddraConfig_);
+  hyddra.run_from_seeds(hyddraSeeds, pv, magneticField);
+  for (const auto& rowSeed : hyddraRowSeeds) {
+    passHyddraDisambiguation.push_back(hyddra.disambiguatedTrackVertexSets().contains(rowSeed));
+    passHyddraIsolation.push_back(hyddra.isolatedTrackVertexSets().contains(rowSeed));
+  }
+
   vertexTab->addColumn<float>("isValid", vertexIsValid, "");
   vertexTab->addColumn<float>("vxy", vxy, "");
   vertexTab->addColumn<float>("vxySigma", vxySigma, "");
@@ -384,6 +416,8 @@ void ElectronVertexTableProducer::produce(edm::StreamID, edm::Event& iEvent, con
   vertexTab->addColumn<float>("ptRefit", refittedVertPt, "");
   vertexTab->addColumn<float>("etaRefit", refittedVertEta, "");
   vertexTab->addColumn<float>("phiRefit", refittedVertPhi, "");
+  vertexTab->addColumn<bool>("passHyddraDisambiguation", passHyddraDisambiguation, "");
+  vertexTab->addColumn<bool>("passHyddraIsolation", passHyddraIsolation, "");
 
   iEvent.put(std::move(vertexTab), "ElectronVertex");
 

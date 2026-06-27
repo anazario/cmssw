@@ -59,6 +59,9 @@ public:
   // Accessors for the forked pipeline outputs.
   reco::VertexCollection seedVertices()     const { return seeds_.vertices(); }
   reco::VertexCollection isolatedVertices() const { return tier1_.vertices(); }
+  const TrackVertexSetCollection& seedTrackVertexSets() const { return seeds_; }
+  const TrackVertexSetCollection& disambiguatedTrackVertexSets() const { return tier0_; }
+  const TrackVertexSetCollection& isolatedTrackVertexSets() const { return tier1_; }
 
   // Flag vectors parallel to seedVertices():
   //   [i] = 1 if seed[i] survived tier-0 disambiguation

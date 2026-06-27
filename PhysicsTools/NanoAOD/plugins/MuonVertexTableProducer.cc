@@ -21,6 +21,7 @@
 
 #include "RecoVertex/VertexPrimitives/interface/TransientVertex.h"
 #include "RecoVertex/KalmanVertexFit/interface/KalmanVertexFitter.h"
+#include "RecoVertex/HyddraSVProducer/interface/LeptonicHYDDRA.h"
 
 #include "TrackingTools/Records/interface/TrackingComponentsRecord.h"
 #include "MagneticField/Records/interface/IdealMagneticFieldRecord.h"
@@ -39,6 +40,7 @@
 
 #include <vector>
 #include <iostream>
+#include <map>
 
 class MuonVertexTableProducer : public edm::global::EDProducer<> {
 public:
@@ -48,6 +50,7 @@ public:
         bsTag_(consumes<reco::BeamSpot>(iConfig.getParameter<edm::InputTag>("beamspot"))),
         pvTag_(consumes<reco::VertexCollection>(iConfig.getParameter<edm::InputTag>("primaryVertex"))),
         generalTrackTag_(consumes<std::vector<reco::Track>>(iConfig.getParameter<edm::InputTag>("generalTracks"))),
+        hyddraConfig_(iConfig.getParameter<edm::ParameterSet>("hyddra")),
         propagatorToken_(esConsumes(edm::ESInputTag("", "SteppingHelixPropagatorAny"))),
         magneticFieldToken_(esConsumes<MagneticField, IdealMagneticFieldRecord>()),
         tkerGeomToken_(esConsumes<TrackerGeometry, TrackerDigiGeometryRecord>()),
@@ -70,6 +73,15 @@ public:
     desc.add<edm::InputTag>("beamspot")->setComment("input beamspot collection");
     desc.add<edm::InputTag>("primaryVertex")->setComment("input primaryVertex collection");
     desc.add<edm::InputTag>("generalTracks")->setComment("input generalTracks collection");
+    edm::ParameterSetDescription hyddraDesc;
+    hyddraDesc.add<double>("seedCosThetaCut", -1.0);
+    hyddraDesc.add<bool>("applySeedChi2Cut", false);
+    hyddraDesc.add<double>("maxNormChi2", 1.0e9);
+    hyddraDesc.add<bool>("applyDcaCut", false);
+    hyddraDesc.add<double>("maxDca", 1.0e9);
+    hyddraDesc.add<bool>("useSmoothing", true);
+    hyddraDesc.add<bool>("useMuonSystemBounds", true);
+    desc.add<edm::ParameterSetDescription>("hyddra", hyddraDesc);
     descriptions.add("muonVertexTables", desc);
   }
 
@@ -104,6 +116,7 @@ private:
   const edm::EDGetTokenT<reco::BeamSpot> bsTag_;
   const edm::EDGetTokenT<reco::VertexCollection> pvTag_;
   const edm::EDGetTokenT<std::vector<reco::Track>> generalTrackTag_;
+  const edm::ParameterSet hyddraConfig_;
   const edm::ESGetToken<Propagator, TrackingComponentsRecord> propagatorToken_;
   const edm::ESGetToken<MagneticField, IdealMagneticFieldRecord> magneticFieldToken_;
   const edm::ESGetToken<TrackerGeometry, TrackerDigiGeometryRecord> tkerGeomToken_;
@@ -112,7 +125,9 @@ private:
 };
 
 void MuonVertexTableProducer::produce(edm::StreamID, edm::Event& iEvent, const edm::EventSetup& iSetup) const {
-  const std::vector<reco::Track>& dsaMuons = iEvent.get(dsaMuonTag_);
+  edm::Handle<std::vector<reco::Track>> dsaMuonHandle;
+  iEvent.getByToken(dsaMuonTag_, dsaMuonHandle);
+  const std::vector<reco::Track>& dsaMuons = *dsaMuonHandle;
   const std::vector<pat::Muon>& patMuons = iEvent.get(patMuonTag_);
 
   const reco::BeamSpot& beamSpotInput = iEvent.get(bsTag_);
@@ -143,6 +158,16 @@ void MuonVertexTableProducer::produce(edm::StreamID, edm::Event& iEvent, const e
   int ddRefittedTrackIdx_counter = 0;
 
   std::map<std::string, std::vector<bool>> vertexIsValid;
+  std::map<std::string, std::vector<TrackVertexSet>> hyddraRowSeeds;
+  std::map<std::string, TrackVertexSetCollection> hyddraSeeds;
+  VertexFitConfig hyddraFitConfig{true, true};
+  auto addHyddraSeed = [&](const std::string& key,
+                           const reco::TrackBaseRef& trackRef1,
+                           const reco::TrackBaseRef& trackRef2) {
+    TrackVertexSet hyddraSeed({trackRef1, trackRef2}, &builder, hyddraFitConfig);
+    hyddraRowSeeds[key].push_back(hyddraSeed);
+    hyddraSeeds[key].add(hyddraSeed);
+  };
   std::map<std::string, std::vector<float>> vxy, vxyz, vx, vy, vz, t, vxySigma, vxyzSigma, vxErr, vyErr, vzErr, tErr;
   std::map<std::string, std::vector<float>> chi2, ndof, normChi2, dR, originalMuonIdx1, originalMuonIdx2,
       refittedTrackIdx1, refittedTrackIdx2, isDSAMuon1, isDSAMuon2;
@@ -209,6 +234,10 @@ void MuonVertexTableProducer::produce(edm::StreamID, edm::Event& iEvent, const e
       // if dca status is good but dca is more than 15 cm
       if (std::get<1>(distanceTuple) && std::get<0>(distanceTuple) > 15)
         continue;
+
+      const reco::TrackBaseRef hyddraTrackRef_i(trackRef_i);
+      const reco::TrackBaseRef hyddraTrackRef_j(trackRef_j);
+      addHyddraSeed("PATPAT", hyddraTrackRef_i, hyddraTrackRef_j);
 
       nPatPatVertices++;
 
@@ -369,6 +398,10 @@ void MuonVertexTableProducer::produce(edm::StreamID, edm::Event& iEvent, const e
       if (std::get<1>(distanceTuple) && std::get<0>(distanceTuple) > 15)
         continue;
 
+      const reco::TrackBaseRef hyddraTrackRef_i(trackRef_i);
+      const reco::TrackBaseRef hyddraTrackRef_j(reco::TrackRef(dsaMuonHandle, j));
+      addHyddraSeed("PATDSA", hyddraTrackRef_i, hyddraTrackRef_j);
+
       nPatDSAVertices++;
 
       vertexIsValid["PATDSA"].push_back(transientMuonVertex.isValid());
@@ -527,6 +560,10 @@ void MuonVertexTableProducer::produce(edm::StreamID, edm::Event& iEvent, const e
       if (std::get<1>(distanceTuple) && std::get<0>(distanceTuple) > 15)
         continue;
 
+      const reco::TrackBaseRef hyddraTrackRef_i(reco::TrackRef(dsaMuonHandle, i));
+      const reco::TrackBaseRef hyddraTrackRef_j(reco::TrackRef(dsaMuonHandle, j));
+      addHyddraSeed("DSADSA", hyddraTrackRef_i, hyddraTrackRef_j);
+
       nDSADSAVertices++;
 
       vertexIsValid["DSADSA"].push_back(transientMuonVertex.isValid());
@@ -657,6 +694,19 @@ void MuonVertexTableProducer::produce(edm::StreamID, edm::Event& iEvent, const e
   vertexTables["PATDSA"] = std::move(patdsaVertexTab);
   vertexTables["DSADSA"] = std::move(dsaVertexTab);
 
+  std::map<std::string, std::vector<bool>> passHyddraDisambiguation, passHyddraIsolation;
+  for (const auto& key : {"PATPAT", "PATDSA", "DSADSA"}) {
+    passHyddraDisambiguation[key].reserve(hyddraRowSeeds[key].size());
+    passHyddraIsolation[key].reserve(hyddraRowSeeds[key].size());
+
+    LeptonicHYDDRA hyddra(hyddraConfig_);
+    hyddra.run_from_seeds(hyddraSeeds[key], pv, magneticField);
+    for (const auto& rowSeed : hyddraRowSeeds[key]) {
+      passHyddraDisambiguation[key].push_back(hyddra.disambiguatedTrackVertexSets().contains(rowSeed));
+      passHyddraIsolation[key].push_back(hyddra.isolatedTrackVertexSets().contains(rowSeed));
+    }
+  }
+
   for (const auto& [key, table] : vertexTables) {
     table->addColumn<float>("isValid", vertexIsValid[key], "");
     table->addColumn<float>("vxy", vxy[key], "");
@@ -707,6 +757,8 @@ void MuonVertexTableProducer::produce(edm::StreamID, edm::Event& iEvent, const e
     table->addColumn<float>("refittedTrackIso04Muon1", refittedTrackIso04Muon1[key], "");
     table->addColumn<float>("refittedTrackIso03Muon2", refittedTrackIso03Muon2[key], "");
     table->addColumn<float>("refittedTrackIso04Muon2", refittedTrackIso04Muon2[key], "");
+    table->addColumn<bool>("passHyddraDisambiguation", passHyddraDisambiguation[key], "");
+    table->addColumn<bool>("passHyddraIsolation", passHyddraIsolation[key], "");
   }
 
   iEvent.put(std::move(vertexTables["PATPAT"]), "PatMuonVertex");

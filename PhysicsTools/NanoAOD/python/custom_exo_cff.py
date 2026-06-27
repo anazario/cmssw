@@ -133,12 +133,25 @@ DSAmuonsTable = cms.EDProducer("DSAMuonTableProducer",
     beamspot = cms.InputTag("offlineBeamSpot")
 )
 
+# Seed-generation cuts are inert for these NanoAOD producers because HYDDRA
+# runs from accepted EXONanoAODv1 SV rows via run_from_seeds(...).
+hyddraFromExoNanoV1Seeds = cms.PSet(
+    seedCosThetaCut=cms.double(-1.0),
+    applySeedChi2Cut=cms.bool(False),
+    maxNormChi2=cms.double(1.0e9),
+    applyDcaCut=cms.bool(False),
+    maxDca=cms.double(1.0e9),
+    useSmoothing=cms.bool(True),
+    useMuonSystemBounds=cms.bool(True),
+)
+
 DSAmuonVertexTable = cms.EDProducer("MuonVertexTableProducer",
     dsaMuons=cms.InputTag("displacedStandAloneMuons"),
     patMuons=cms.InputTag("linkedObjects","muons"),
     beamspot=cms.InputTag("offlineBeamSpot"),
     generalTracks=cms.InputTag("generalTracks"),
-    primaryVertex=cms.InputTag("offlineSlimmedPrimaryVertices")
+    primaryVertex=cms.InputTag("offlineSlimmedPrimaryVertices"),
+    hyddra=hyddraFromExoNanoV1Seeds.clone()
 )
 
 from PhysicsTools.NanoAOD.simplePATMuonFlatTableProducer_cfi import simplePATMuonFlatTableProducer
@@ -180,7 +193,8 @@ PATmuonExtendedTable = cms.EDProducer("MuonExtendedTableProducer",
 electronVertexTable = cms.EDProducer("ElectronVertexTableProducer",
     electrons=cms.InputTag("linkedObjects","electrons"),
     beamspot=cms.InputTag("offlineBeamSpot"),
-    primaryVertex=cms.InputTag("offlineSlimmedPrimaryVertices")
+    primaryVertex=cms.InputTag("offlineSlimmedPrimaryVertices"),
+    hyddra=hyddraFromExoNanoV1Seeds.clone()
 )
 
 electronExtendedTable = cms.EDProducer("ElectronExtendedTableProducer",
