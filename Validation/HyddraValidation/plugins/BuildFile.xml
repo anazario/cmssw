@@ -10,6 +10,9 @@
 <use name="MagneticField/Engine"/>
 <use name="MagneticField/Records"/>
 <use name="RecoVertex/HyddraSVProducer"/>
+<use name="RecoVertex/KalmanVertexFit"/>
+<use name="TrackingTools/PatternTools"/>
+<use name="TrackingTools/TrajectoryState"/>
 <use name="TrackingTools/TransientTrack"/>
 <use name="TrackingTools/Records"/>
 <use name="root"/>

@@ -6,6 +6,7 @@
 #include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
 #include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
 #include "FWCore/Utilities/interface/transform.h"
+#include "DataFormats/Common/interface/OrphanHandle.h"
 #include "DataFormats/NanoAOD/interface/FlatTable.h"
 
 #include "DataFormats/TrackReco/interface/Track.h"
@@ -62,6 +63,7 @@ public:
     produces<nanoaod::FlatTable>("PatMuonVertexRefittedTracks");
     produces<nanoaod::FlatTable>("PatDSAMuonVertexRefittedTracks");
     produces<nanoaod::FlatTable>("DSAMuonVertexRefittedTracks");
+    produces<reco::TrackCollection>("PatMuonHyddraTracks");
   }
 
   ~MuonVertexTableProducer() override {}
@@ -190,17 +192,38 @@ void MuonVertexTableProducer::produce(edm::StreamID, edm::Event& iEvent, const e
       refittedTrackIso04Dimuon1, refittedTrackIso04Dimuon2, refittedTrackIso03Muon1, refittedTrackIso03Muon2,
       refittedTrackIso04Muon1, refittedTrackIso04Muon2;
 
+  std::vector<reco::TrackRef> selectedPatMuonTrackRefs;
+  selectedPatMuonTrackRefs.reserve(patMuons.size());
+  auto patMuonHyddraTracks = std::make_unique<reco::TrackCollection>();
+  patMuonHyddraTracks->reserve(patMuons.size());
+  // HYDDRA identifies tracks by TrackBaseRef product id/key. Clone the selected
+  // PAT muon tracks into one reco::TrackCollection so PATPAT seeds get unique
+  // reco::TrackRefs and do not collapse inside TrackVertexSet.
+  for (const auto& muon : patMuons) {
+    reco::TrackRef trackRef;
+    if (muon.isGlobalMuon())
+      trackRef = muon.combinedMuon();
+    else if (muon.isStandAloneMuon())
+      trackRef = muon.standAloneMuon();
+    else
+      trackRef = muon.tunePMuonBestTrack();
+
+    if (trackRef.isNull() || !trackRef.isAvailable()) {
+      throw cms::Exception("MuonVertexTableProducer")
+          << "Selected PAT muon has no valid track ref for HYDDRA PatMuonHyddraTracks.";
+    }
+
+    selectedPatMuonTrackRefs.push_back(trackRef);
+    patMuonHyddraTracks->push_back(*trackRef);
+  }
+  edm::OrphanHandle<reco::TrackCollection> patMuonHyddraTrackHandle =
+      iEvent.put(std::move(patMuonHyddraTracks), "PatMuonHyddraTracks");
+
   // pat muons
   for (size_t i = 0; i < patMuons.size(); i++) {
     const pat::Muon& muon_i = patMuons.at(i);
 
-    reco::TrackRef trackRef_i;
-    if (muon_i.isGlobalMuon())
-      trackRef_i = muon_i.combinedMuon();
-    else if (muon_i.isStandAloneMuon())
-      trackRef_i = muon_i.standAloneMuon();
-    else
-      trackRef_i = muon_i.tunePMuonBestTrack();
+    const reco::TrackRef& trackRef_i = selectedPatMuonTrackRefs.at(i);
 
     const auto& muonTrack_i = trackRef_i.get();
     reco::TransientTrack muonTransientTrack_i = builder.build(muonTrack_i);
@@ -209,13 +232,7 @@ void MuonVertexTableProducer::produce(edm::StreamID, edm::Event& iEvent, const e
     for (size_t j = i + 1; j < patMuons.size(); j++) {
       const pat::Muon& muon_j = patMuons.at(j);
 
-      reco::TrackRef trackRef_j;
-      if (muon_j.isGlobalMuon())
-        trackRef_j = muon_j.combinedMuon();
-      else if (muon_j.isStandAloneMuon())
-        trackRef_j = muon_j.standAloneMuon();
-      else
-        trackRef_j = muon_j.tunePMuonBestTrack();
+      const reco::TrackRef& trackRef_j = selectedPatMuonTrackRefs.at(j);
 
       const auto& muonTrack_j = trackRef_j.get();
       reco::TransientTrack muonTransientTrack_j = builder.build(muonTrack_j);
@@ -235,8 +252,8 @@ void MuonVertexTableProducer::produce(edm::StreamID, edm::Event& iEvent, const e
       if (std::get<1>(distanceTuple) && std::get<0>(distanceTuple) > 15)
         continue;
 
-      const reco::TrackBaseRef hyddraTrackRef_i(trackRef_i);
-      const reco::TrackBaseRef hyddraTrackRef_j(trackRef_j);
+      const reco::TrackBaseRef hyddraTrackRef_i(reco::TrackRef(patMuonHyddraTrackHandle, i));
+      const reco::TrackBaseRef hyddraTrackRef_j(reco::TrackRef(patMuonHyddraTrackHandle, j));
       addHyddraSeed("PATPAT", hyddraTrackRef_i, hyddraTrackRef_j);
 
       nPatPatVertices++;
@@ -398,7 +415,7 @@ void MuonVertexTableProducer::produce(edm::StreamID, edm::Event& iEvent, const e
       if (std::get<1>(distanceTuple) && std::get<0>(distanceTuple) > 15)
         continue;
 
-      const reco::TrackBaseRef hyddraTrackRef_i(trackRef_i);
+      const reco::TrackBaseRef hyddraTrackRef_i(reco::TrackRef(patMuonHyddraTrackHandle, i));
       const reco::TrackBaseRef hyddraTrackRef_j(reco::TrackRef(dsaMuonHandle, j));
       addHyddraSeed("PATDSA", hyddraTrackRef_i, hyddraTrackRef_j);
 
